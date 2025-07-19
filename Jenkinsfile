@@ -5,7 +5,7 @@ pipeline {
         // Use Jenkins workspace or a directory Jenkins can write to
         PROJECT_PATH = '/var/lib/jenkins/deployments/todo-app'
         GIT_REPO = 'https://github.com/kvnochieng52/todo-app.git'
-        DEPLOY_SCRIPT = 'deploy-with-sudo.sh'
+        DEPLOY_SCRIPT = 'deploy.sh'
     }
     
     stages {
