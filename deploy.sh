@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# Laravel Deployment Script (No Sudo Version)
-echo "Starting Laravel deployment (no-sudo version)..."
+# Laravel Deployment Script
+echo "Starting Laravel deployment..."
 
 # Navigate to project directory
-cd /home/jenkins/todo-app
+cd /app/todo-app
+
+# Since files are already copied via rsync, no need to git pull again
+echo "Files already synced from Jenkins workspace"
 
 # Copy environment file if it doesn't exist
 if [ ! -f .env ]; then
@@ -20,7 +23,7 @@ fi
 # Generate application key if not set
 php artisan key:generate --force
 
-# Install/Update Composer dependencies
+# Install/Update Composer dependencies (in case of production-only dependencies)
 echo "Ensuring production dependencies are installed..."
 composer install --no-dev --optimize-autoloader --no-interaction
 
@@ -36,27 +39,36 @@ php artisan route:cache
 php artisan view:clear
 php artisan view:cache
 
-# Run database migrations (comment out if no DB access)
+# Run database migrations
 echo "Running database migrations..."
-php artisan migrate --force || echo "Migration failed - check database connection"
+php artisan migrate --force
 
 # Clear application cache
 php artisan cache:clear
 
 # Create storage link if it doesn't exist
 if [ ! -L public/storage ]; then
-    php artisan storage:link || echo "Could not create storage link"
+    php artisan storage:link
+    echo "Storage link created"
 fi
 
-# Set basic permissions (no sudo)
-echo "Setting basic permissions..."
-chmod -R 755 .
-chmod -R 775 storage bootstrap/cache 2>/dev/null || echo "Could not set some permissions"
+# Set proper permissions (using sudo)
+echo "Setting permissions..."
+sudo chown -R www-data:www-data /app/todo-app
+sudo chmod -R 755 /app/todo-app
 
-# Create log file if it doesn't exist
-touch storage/logs/laravel.log
-chmod 664 storage/logs/laravel.log 2>/dev/null || true
+# Set specific permissions for writable directories
+sudo chmod -R 775 /app/todo-app/storage
+sudo chmod -R 775 /app/todo-app/bootstrap/cache
 
-echo "Deployment completed!"
-echo "Note: This deployment runs without sudo - some permissions may need manual adjustment"
-echo "Application files are in: $(pwd)"
+# Ensure log files are writable
+sudo touch /app/todo-app/storage/logs/laravel.log
+sudo chmod 664 /app/todo-app/storage/logs/laravel.log
+sudo chown www-data:www-data /app/todo-app/storage/logs/laravel.log
+
+# Restart services if needed (uncomment as needed)
+# sudo systemctl reload nginx
+# sudo systemctl restart php8.1-fpm  # Adjust PHP version as needed
+
+echo "Deployment completed successfully!"
+echo "Application is now live at your domain!"

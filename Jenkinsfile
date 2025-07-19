@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        PROJECT_PATH = '/home/jenkins/todo-app'  // Use Jenkins home instead
+        PROJECT_PATH = '/app/todo-app'
         GIT_REPO = 'https://github.com/kvnochieng52/todo-app.git'
     }
     
@@ -19,45 +19,17 @@ pipeline {
                 echo 'Installing PHP dependencies...'
                 sh 'composer install --no-dev --optimize-autoloader'
                 
-                echo 'Installing Node.js dependencies...'
-                sh '''
-                    if [ -f package.json ]; then
-                        npm install
-                        
-                        # Install Tailwind CSS if not present
-                        if ! npm list tailwindcss > /dev/null 2>&1; then
-                            echo "Installing Tailwind CSS..."
-                            npm install -D tailwindcss@latest postcss@latest autoprefixer@latest
-                        fi
-                    else
-                        echo "No package.json found, skipping npm install"
-                    fi
-                '''
+                echo 'Skipping Node.js dependencies for now...'
             }
         }
         
         stage('Build Assets') {
             steps {
-                echo 'Building frontend assets...'
+                echo 'Skipping asset build for now...'
                 sh '''
-                    if [ -f package.json ]; then
-                        # Ensure Tailwind config exists
-                        if [ ! -f tailwind.config.js ]; then
-                            npx tailwindcss init -p
-                        fi
-                        
-                        if npm run build; then
-                            echo "Assets built successfully"
-                        else
-                            echo "Asset build failed, creating empty public/build directory"
-                            mkdir -p public/build
-                            touch public/build/.gitkeep
-                        fi
-                    else
-                        echo "No package.json found, skipping asset build"
-                        mkdir -p public/build
-                        touch public/build/.gitkeep
-                    fi
+                    echo "Creating placeholder build directory"
+                    mkdir -p public/build
+                    touch public/build/.gitkeep
                 '''
             }
         }
@@ -71,13 +43,13 @@ pipeline {
                     fi
                     php artisan key:generate --env=testing --force
                     
-                    # Try to run tests
+                    # Try different test commands based on Laravel version
                     if php artisan test --help > /dev/null 2>&1; then
                         echo "Running tests with artisan test command..."
-                        php artisan test || echo "Tests failed but continuing..."
+                        php artisan test
                     elif [ -f vendor/bin/phpunit ]; then
                         echo "Running tests with phpunit directly..."
-                        vendor/bin/phpunit || echo "Tests failed but continuing..."
+                        vendor/bin/phpunit
                     else
                         echo "No test framework found, skipping tests..."
                     fi
@@ -87,13 +59,19 @@ pipeline {
         
         stage('Deploy') {
             steps {
-                echo 'Deploying to Jenkins workspace (no sudo required)...'
+                echo 'Deploying to production...'
                 sh '''
-                    # Create target directory if it doesn't exist
-                    mkdir -p ${PROJECT_PATH}
+                    # Create target directory if it doesn't exist (without sudo first)
+                    if [ ! -d ${PROJECT_PATH} ]; then
+                        sudo mkdir -p ${PROJECT_PATH}
+                        sudo chown jenkins:jenkins ${PROJECT_PATH}
+                    fi
                     
-                    # Copy files to deployment directory
-                    rsync -av --delete \
+                    # Ensure Jenkins can write to the directory
+                    sudo chown -R jenkins:jenkins ${PROJECT_PATH} || true
+                    
+                    # Copy files to deployment directory with fixed rsync options
+                    rsync -rlptgoD --no-owner --no-group --delete \
                           --exclude='.git' \
                           --exclude='node_modules' \
                           --exclude='.env.testing' \
@@ -102,10 +80,10 @@ pipeline {
                           --exclude='.phpunit.result.cache' \
                           . ${PROJECT_PATH}/
                     
-                    # Run deployment script (modified for no-sudo)
+                    # Run deployment script
                     cd ${PROJECT_PATH}
-                    chmod +x deploy-no-sudo.sh
-                    ./deploy-no-sudo.sh
+                    chmod +x deploy.sh
+                    ./deploy.sh
                 '''
             }
         }
@@ -114,7 +92,6 @@ pipeline {
     post {
         success {
             echo 'Deployment successful!'
-            echo "Application deployed to: ${PROJECT_PATH}"
         }
         failure {
             echo 'Deployment failed!'
