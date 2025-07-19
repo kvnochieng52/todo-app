@@ -78,8 +78,21 @@ pipeline {
             steps {
                 echo 'Deploying to production...'
                 sh '''
-                    # Copy files to deployment directory
-                    rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env.testing' --exclude='.env' . ${PROJECT_PATH}/
+                    # Create target directory if it doesn't exist
+                    sudo mkdir -p ${PROJECT_PATH}
+                    
+                    # Set proper ownership before rsync
+                    sudo chown -R jenkins:jenkins ${PROJECT_PATH}
+                    
+                    # Copy files to deployment directory with fixed rsync options
+                    rsync -rlptgoD --no-owner --no-group --delete \
+                          --exclude='.git' \
+                          --exclude='node_modules' \
+                          --exclude='.env.testing' \
+                          --exclude='.env' \
+                          --exclude='tests/' \
+                          --exclude='.phpunit.result.cache' \
+                          . ${PROJECT_PATH}/
                     
                     # Run deployment script
                     cd ${PROJECT_PATH}
