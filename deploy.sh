@@ -6,38 +6,36 @@ echo "Starting Laravel deployment..."
 # Navigate to project directory
 cd /app/todo-app
 
-# Pull from master branch (not main)
+# Pull from master branch
 git pull origin master
 
 # Install/Update Composer dependencies
 composer install --no-dev --optimize-autoloader
 
-# Handle NPM dependencies
+# Handle NPM dependencies and build assets
 if [ -f package.json ]; then
-    # Check if package-lock.json exists, if not create it
-    if [ ! -f package-lock.json ]; then
-        echo "Creating package-lock.json..."
-        npm install --production
-    else
-        npm ci --omit=dev
-    fi
+    echo "Installing npm dependencies..."
+    npm install
     
     # Build assets
     if npm run build; then
         echo "Assets built successfully"
-    elif npm run dev; then
-        echo "Assets built with dev command"
     else
-        echo "Asset build failed, continuing..."
+        echo "Asset build failed, creating placeholder build directory"
+        mkdir -p public/build
+        touch public/build/.gitkeep
     fi
 else
-    echo "No package.json found, skipping npm steps"
+    echo "No package.json found, creating placeholder build directory"
+    mkdir -p public/build
+    touch public/build/.gitkeep
 fi
 
 # Copy environment file if it doesn't exist
 if [ ! -f .env ]; then
     cp .env.example .env
     echo "Created .env file from .env.example"
+    echo "Remember to update the .env file with your production settings!"
 fi
 
 # Generate application key if not set

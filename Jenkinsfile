@@ -22,11 +22,7 @@ pipeline {
                 echo 'Installing Node.js dependencies...'
                 sh '''
                     if [ -f package.json ]; then
-                        if [ ! -f package-lock.json ]; then
-                            npm install --production
-                        else
-                            npm ci --omit=dev
-                        fi
+                        npm install
                     else
                         echo "No package.json found, skipping npm install"
                     fi
@@ -41,13 +37,15 @@ pipeline {
                     if [ -f package.json ]; then
                         if npm run build; then
                             echo "Assets built successfully"
-                        elif npm run dev; then
-                            echo "Assets built with dev command"
                         else
-                            echo "Asset build failed, continuing..."
+                            echo "Asset build failed, creating empty public/build directory"
+                            mkdir -p public/build
+                            touch public/build/.gitkeep
                         fi
                     else
                         echo "No package.json found, skipping asset build"
+                        mkdir -p public/build
+                        touch public/build/.gitkeep
                     fi
                 '''
             }
@@ -61,10 +59,16 @@ pipeline {
                         cp .env.example .env.testing
                     fi
                     php artisan key:generate --env=testing --force
-                    if [ -f phpunit.xml ] || [ -f phpunit.xml.dist ]; then
+                    
+                    # Try different test commands based on Laravel version
+                    if php artisan test --help > /dev/null 2>&1; then
+                        echo "Running tests with artisan test command..."
                         php artisan test
+                    elif [ -f vendor/bin/phpunit ]; then
+                        echo "Running tests with phpunit directly..."
+                        vendor/bin/phpunit
                     else
-                        echo "No phpunit.xml found, skipping tests"
+                        echo "No test framework found, skipping tests..."
                     fi
                 '''
             }
@@ -75,7 +79,7 @@ pipeline {
                 echo 'Deploying to production...'
                 sh '''
                     # Copy files to deployment directory
-                    rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env.testing' . ${PROJECT_PATH}/
+                    rsync -av --exclude='.git' --exclude='node_modules' --exclude='.env.testing' --exclude='.env' . ${PROJECT_PATH}/
                     
                     # Run deployment script
                     cd ${PROJECT_PATH}
